@@ -210,7 +210,7 @@ pub const Linenoise = struct {
 
     /// Initialize a linenoise struct
     pub fn init(allocator: Allocator) Self {
-        return initWithFiles(allocator, std.io.getStdIn(), std.io.getStdOut());
+        return initWithFiles(allocator, std.fs.File.stdin(), std.fs.File.stdout());
     }
 
     /// Initialize a linenoise struct with specific input and output streams

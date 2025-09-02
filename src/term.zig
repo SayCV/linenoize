@@ -17,7 +17,6 @@ pub fn isUnsupportedTerm(allocator: std.mem.Allocator) bool {
 }
 
 const w = struct {
-    pub usingnamespace std.os.windows;
     pub const ENABLE_VIRTUAL_TERMINAL_INPUT = @as(c_int, 0x200);
     pub const CP_UTF8 = @as(c_int, 65001);
     pub const INPUT_RECORD = extern struct {
@@ -27,7 +26,6 @@ const w = struct {
 };
 
 const k32 = struct {
-    pub usingnamespace std.os.windows.kernel32;
     pub extern "kernel32" fn SetConsoleCP(wCodePageID: w.UINT) callconv(w.WINAPI) w.BOOL;
     pub extern "kernel32" fn PeekConsoleInputW(hConsoleInput: w.HANDLE, lpBuffer: [*]w.INPUT_RECORD, nLength: w.DWORD, lpNumberOfEventsRead: ?*w.DWORD) callconv(w.WINAPI) w.BOOL;
     pub extern "kernel32" fn ReadConsoleW(hConsoleInput: w.HANDLE, lpBuffer: [*]u16, nNumberOfCharsToRead: w.DWORD, lpNumberOfCharsRead: ?*w.DWORD, lpReserved: ?*anyopaque) callconv(w.WINAPI) w.BOOL;
