@@ -9,7 +9,7 @@ pub fn build(b: *Build) void {
         .optimize = optimize,
     }).module("wcwidth");
 
-    const linenoise = b.addModule("linenoise", .{
+    const linenoize = b.addModule("linenoize", .{
         .root_source_file = b.path("src/main.zig"),
         .imports = &.{
             .{ .name = "wcwidth", .module = wcwidth },
@@ -19,8 +19,9 @@ pub fn build(b: *Build) void {
     });
 
     // Static library
-    const lib = b.addStaticLibrary(.{
-        .name = "linenoise",
+    const lib = b.addLibrary(.{
+        .linkage = .static,
+        .name = "linenoize",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/c.zig"),
             .target = target,
@@ -33,7 +34,7 @@ pub fn build(b: *Build) void {
 
     // Tests
     const main_tests = b.addTest(.{
-        .root_module = linenoise,
+        .root_module = linenoize,
     });
 
     const run_main_tests = b.addRunArtifact(main_tests);
@@ -50,7 +51,7 @@ pub fn build(b: *Build) void {
             .optimize = optimize,
         }),
     });
-    example.root_module.addImport("linenoise", linenoise);
+    example.root_module.addImport("linenoize", linenoize);
 
     var example_run = b.addRunArtifact(example);
 
