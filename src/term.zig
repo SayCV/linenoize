@@ -88,14 +88,18 @@ pub fn disableRawMode(in: File, out: File, orig: termios) void {
 
 fn getCursorPosition(in: File, out: File) !usize {
     var buf: [32]u8 = undefined;
-    var reader = in.reader();
+    var in_reader = in.reader(&buf);
+    var reader = &in_reader.interface;
 
+    var out_buf: [1024]u8 = undefined;
+    var out_writer = out.writer(&out_buf);
+    const writer = &out_writer.interface;
     // Tell terminal to report cursor to in
-    try out.writeAll("\x1B[6n");
+    try writer.writeAll("\x1B[6n");
+    try writer.flush();
 
     // Read answer
-    const answer = (try reader.readUntilDelimiterOrEof(&buf, 'R')) orelse
-        return error.CursorPos;
+    const answer = (try reader.takeDelimiterInclusive('R'));
 
     // Parse answer
     if (!std.mem.startsWith(u8, "\x1B[", answer))
@@ -109,7 +113,9 @@ fn getCursorPosition(in: File, out: File) !usize {
 }
 
 fn getColumnsFallback(in: File, out: File) !usize {
-    var writer = out.writer();
+    var buf: [1024]u8 = undefined;
+    var out_writer = out.writer(&buf);
+    const writer = &out_writer.interface;
     const orig_cursor_pos = try getCursorPosition(in, out);
 
     try writer.print("\x1B[999C", .{});
@@ -146,13 +152,19 @@ pub fn getColumns(in: File, out: File) !usize {
 }
 
 pub fn clearScreen() !void {
-    const stdout = std.io.getStdErr();
-    try stdout.writeAll("\x1b[H\x1b[2J");
+    var stderr_buffer: [1024]u8 = undefined;
+    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    const writer = &stderr_writer.interface;
+    try writer.writeAll("\x1b[H\x1b[2J");
+    try writer.flush();
 }
 
 pub fn beep() !void {
-    const stderr = std.io.getStdErr();
-    try stderr.writeAll("\x07");
+    var stderr_buffer: [1024]u8 = undefined;
+    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    const writer = &stderr_writer.interface;
+    try writer.writeAll("\x07");
+    try writer.flush();
 }
 
 var utf8ConsoleBuffer = [_]u8{0} ** 10;

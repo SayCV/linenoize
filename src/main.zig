@@ -184,9 +184,13 @@ fn linenoiseRaw(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]con
 
 /// Read a line with no special features (no hints, no completions, no history)
 fn linenoiseNoTTY(allocator: Allocator, stdin: File) !?[]const u8 {
-    var reader = stdin.reader();
     const max_line_len = std.math.maxInt(usize);
-    return reader.readUntilDelimiterAlloc(allocator, '\n', max_line_len) catch |e| switch (e) {
+    const buf = try allocator.alloc(u8, max_line_len);
+    var stdin_reader = stdin.reader(buf);
+    var reader = &stdin_reader.interface;
+    return reader.takeDelimiterExclusive(
+        '\n',
+    ) catch |e| switch (e) {
         error.EndOfStream => return null,
         else => return e,
     };
