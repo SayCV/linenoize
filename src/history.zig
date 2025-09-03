@@ -1,12 +1,12 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const ArrayListUnmanaged = std.ArrayListUnmanaged;
+const ArrayList = std.ArrayList;
 
 const max_line_len = 4096;
 
 pub const History = struct {
     allocator: Allocator,
-    hist: ArrayListUnmanaged([]const u8) = .empty,
+    hist: ArrayList([]const u8) = .empty,
     max_len: usize = 100,
     current: usize = 0,
 
@@ -21,7 +21,7 @@ pub const History = struct {
 
     /// Deinitializes the history
     pub fn deinit(self: *Self) void {
-        for (self.hist.items) |x| self.allocator.free(x);
+        //for (self.hist.items) |x| self.allocator.free(x);
         self.hist.deinit(self.allocator);
     }
 
@@ -43,7 +43,7 @@ pub const History = struct {
     /// instead copies it
     pub fn add(self: *Self, line: []const u8) !void {
         if (self.hist.items.len < 1 or !std.mem.eql(u8, line, self.hist.items[self.hist.items.len - 1])) {
-            try self.hist.append(self.allocator, try self.allocator.dupe(u8, line));
+            try self.hist.append(self.allocator, line);
             self.truncate();
         }
     }
