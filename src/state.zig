@@ -493,7 +493,7 @@ pub const LinenoiseState = struct {
             //const current_entry = self.ln.history.hist.items[old_index];
             //self.ln.history.allocator.free(current_entry);
             self.ln.history.hist.items[old_index] = try self.ln.history.allocator.dupe(u8, self.buf.items);
-            self.ln.history.allocator.free(self.ln.history.hist.items[old_index]);
+            //self.ln.history.allocator.free(self.ln.history.hist.items[old_index]);
 
             // Update history index
             const new_index = switch (dir) {

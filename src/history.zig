@@ -21,7 +21,7 @@ pub const History = struct {
 
     /// Deinitializes the history
     pub fn deinit(self: *Self) void {
-        //for (self.hist.items) |x| self.allocator.free(x);
+        for (self.hist.items) |x| self.allocator.free(x);
         self.hist.deinit(self.allocator);
     }
 
@@ -44,7 +44,7 @@ pub const History = struct {
     pub fn add(self: *Self, line: []const u8) !void {
         if (self.hist.items.len < 1 or !std.mem.eql(u8, line, self.hist.items[self.hist.items.len - 1])) {
             try self.hist.append(self.allocator, line);
-            self.truncate();
+            // self.truncate();
         }
     }
 
@@ -60,7 +60,7 @@ pub const History = struct {
 
         var buffer: [max_line_len]u8 = undefined;
         var reader = file.reader(&buffer);
-        while (reader.interface.takeDelimiterExclusive('\n')) |line| {
+        while (reader.interface.takeDelimiterInclusive('\n')) |line| {
             try self.hist.append(self.allocator, line);
         } else |err| {
             switch (err) {
@@ -78,6 +78,13 @@ pub const History = struct {
         defer file.close();
 
         for (self.hist.items) |line| {
+            var stdout_buffer: [1024]u8 = undefined;
+            var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+            const writer = &stdout_writer.interface;
+
+            try writer.print("{s}\n", .{line});
+            try writer.flush();
+
             try file.writeAll(line);
             try file.writeAll("\n");
         }
