@@ -58,9 +58,10 @@ pub const History = struct {
         const file = try std.fs.cwd().openFile(path, .{});
         defer file.close();
 
-        var buffer: [max_line_len]u8 = undefined;
-        var reader = file.reader(&buffer);
-        while (reader.interface.takeDelimiterInclusive('\n')) |line| {
+        const buffer = try self.allocator.alloc(u8, max_line_len);
+        errdefer self.allocator.free(buffer);
+        var reader = file.reader(buffer);
+        while (reader.interface.takeDelimiterExclusive('\n')) |line| {
             try self.hist.append(self.allocator, line);
         } else |err| {
             switch (err) {
@@ -69,7 +70,7 @@ pub const History = struct {
             }
         }
 
-        self.truncate();
+        // self.truncate();
     }
 
     /// Saves the history to a file
@@ -78,12 +79,12 @@ pub const History = struct {
         defer file.close();
 
         for (self.hist.items) |line| {
-            var stdout_buffer: [1024]u8 = undefined;
-            var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-            const writer = &stdout_writer.interface;
-
-            try writer.print("{s}\n", .{line});
-            try writer.flush();
+            // var stdout_buffer: [1024]u8 = undefined;
+            // var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+            // const writer = &stdout_writer.interface;
+            //
+            // try writer.print("{s}\n", .{line});
+            // try writer.flush();
 
             try file.writeAll(line);
             try file.writeAll("\n");
@@ -95,7 +96,7 @@ pub const History = struct {
     /// len most recent items.
     pub fn setMaxLen(self: *Self, len: usize) void {
         self.max_len = len;
-        self.truncate();
+        // self.truncate();
     }
 };
 
