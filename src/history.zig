@@ -43,7 +43,7 @@ pub const History = struct {
     /// instead copies it
     pub fn add(self: *Self, line: []const u8) !void {
         if (self.hist.items.len < 1 or !std.mem.eql(u8, line, self.hist.items[self.hist.items.len - 1])) {
-            try self.hist.append(self.allocator, line);
+            try self.hist.append(self.allocator, try self.allocator.dupe(u8, line));
             self.truncate();
         }
     }
@@ -59,10 +59,10 @@ pub const History = struct {
         defer file.close();
 
         const buffer = try self.allocator.alloc(u8, max_line_len);
-        errdefer self.allocator.free(buffer);
+        defer self.allocator.free(buffer);
         var reader = file.reader(buffer);
         while (reader.interface.takeDelimiterExclusive('\n')) |line| {
-            try self.hist.append(self.allocator, line);
+            try self.hist.append(self.allocator, try self.allocator.dupe(u8, line));
         } else |err| {
             switch (err) {
                 error.EndOfStream => return,
