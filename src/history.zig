@@ -44,7 +44,7 @@ pub const History = struct {
     pub fn add(self: *Self, line: []const u8) !void {
         if (self.hist.items.len < 1 or !std.mem.eql(u8, line, self.hist.items[self.hist.items.len - 1])) {
             try self.hist.append(self.allocator, line);
-            // self.truncate();
+            self.truncate();
         }
     }
 
@@ -70,7 +70,7 @@ pub const History = struct {
             }
         }
 
-        // self.truncate();
+        self.truncate();
     }
 
     /// Saves the history to a file
@@ -96,7 +96,7 @@ pub const History = struct {
     /// len most recent items.
     pub fn setMaxLen(self: *Self, len: usize) void {
         self.max_len = len;
-        // self.truncate();
+        self.truncate();
     }
 };
 
