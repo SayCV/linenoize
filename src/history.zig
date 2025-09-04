@@ -79,13 +79,6 @@ pub const History = struct {
         defer file.close();
 
         for (self.hist.items) |line| {
-            // var stdout_buffer: [1024]u8 = undefined;
-            // var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-            // const writer = &stdout_writer.interface;
-            //
-            // try writer.print("{s}\n", .{line});
-            // try writer.flush();
-
             try file.writeAll(line);
             try file.writeAll("\n");
         }
