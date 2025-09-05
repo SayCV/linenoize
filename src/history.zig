@@ -65,7 +65,7 @@ pub const History = struct {
             try self.hist.append(self.allocator, try self.allocator.dupe(u8, line));
         } else |err| {
             switch (err) {
-                error.EndOfStream => return,
+                error.EndOfStream => {},
                 else => return err,
             }
         }
