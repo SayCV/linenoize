@@ -304,7 +304,11 @@ pub const LinenoiseState = struct {
 
         // Move cursor to original position
         const cursor_pos = if (pos > avail_space) self.cols - display_hint_width - 1 else display_prompt_width + pos;
-        if (cursor_pos > 0) try writer.print("\r\x1b[{}C", .{cursor_pos});
+        if (cursor_pos == 0) {
+            try writer.print("\r\x1b[-1C", .{});
+        } else {
+            try writer.print("\r\x1b[{}C", .{cursor_pos});
+        }
 
         // Write buffer
         try writer.flush();
