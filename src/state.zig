@@ -140,7 +140,7 @@ pub const LinenoiseState = struct {
             .stdin = in,
             .stdout = out,
             .prompt = prompt,
-            .cols = getColumns(in, out) catch 80,
+            .cols = getColumns(ln.io, in, out) catch 80,
         };
     }
 
@@ -156,7 +156,7 @@ pub const LinenoiseState = struct {
         }
 
         if (completions.len == 0) {
-            try term.beep();
+            try term.beep(self.io);
         } else {
             var finished = false;
             var i: usize = 0;
@@ -194,7 +194,7 @@ pub const LinenoiseState = struct {
                     key_tab => {
                         // Next completion
                         i = (i + 1) % (completions.len + 1);
-                        if (i == completions.len) try term.beep();
+                        if (i == completions.len) try term.beep(self.io);
                     },
                     key_esc => {
                         // Stop browsing completions, return to buffer displayed
