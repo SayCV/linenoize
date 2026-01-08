@@ -5,6 +5,7 @@ const ArrayList = std.ArrayList;
 const max_line_len = 4096;
 
 pub const History = struct {
+    io: std.Io,
     allocator: Allocator,
     hist: ArrayList([]const u8) = .empty,
     max_len: usize = 100,
@@ -13,8 +14,9 @@ pub const History = struct {
     const Self = @This();
 
     /// Creates a new empty history
-    pub fn empty(allocator: Allocator) Self {
+    pub fn empty(io: std.Io, allocator: Allocator) Self {
         return .{
+            .io = io,
             .allocator = allocator,
         };
     }
@@ -55,12 +57,12 @@ pub const History = struct {
 
     /// Loads the history from a file
     pub fn load(self: *Self, path: []const u8) !void {
-        const file = try std.fs.cwd().openFile(path, .{});
-        defer file.close();
+        const file = try std.Io.Dir.cwd().openFile(self.io, path, .{});
+        defer file.close(self.io);
 
         const buffer = try self.allocator.alloc(u8, max_line_len);
         defer self.allocator.free(buffer);
-        var reader = file.reader(buffer);
+        var reader = file.reader(self.io, buffer);
         while (reader.interface.takeDelimiterExclusive('\n')) |line| {
             try self.hist.append(self.allocator, try self.allocator.dupe(u8, line));
         } else |err| {
@@ -75,12 +77,14 @@ pub const History = struct {
 
     /// Saves the history to a file
     pub fn save(self: *Self, path: []const u8) !void {
-        const file = try std.fs.cwd().createFile(path, .{});
-        defer file.close();
+        const file = try std.Io.Dir.cwd().createFile(self.io, path, .{});
+        defer file.close(self.io);
+        var f_writer = file.writer(self.io, &.{});
 
         for (self.hist.items) |line| {
-            try file.writeAll(line);
-            try file.writeAll("\n");
+            try f_writer.interface.writeAll(line);
+            try f_writer.interface.writeAll("\n");
+            try f_writer.interface.flush();
         }
     }
 

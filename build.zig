@@ -29,7 +29,7 @@ pub fn build(b: *Build) void {
         }),
     });
     lib.root_module.addImport("wcwidth", wcwidth);
-    lib.linkLibC();
+    lib.root_module.link_libc = true;
     b.installArtifact(lib);
 
     // Tests
@@ -67,9 +67,9 @@ pub fn build(b: *Build) void {
         }),
     });
     c_example.root_module.addCSourceFile(.{ .file = b.path("examples/example.c") });
-    c_example.addIncludePath(b.path("include"));
-    c_example.linkLibC();
-    c_example.linkLibrary(lib);
+    c_example.root_module.addIncludePath(b.path("include"));
+    c_example.root_module.link_libc = true;
+    c_example.root_module.linkLibrary(lib);
 
     var c_example_run = b.addRunArtifact(c_example);
 

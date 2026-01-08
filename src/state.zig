@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
-const File = std.fs.File;
+const File = std.Io.File;
 const math = std.math;
 
 const Linenoise = @import("main.zig").Linenoise;
@@ -116,6 +116,7 @@ fn calculateStartOrEnd(
 }
 
 pub const LinenoiseState = struct {
+    io: std.Io,
     allocator: Allocator,
     ln: *Linenoise,
 
@@ -132,6 +133,7 @@ pub const LinenoiseState = struct {
 
     pub fn init(ln: *Linenoise, in: File, out: File, prompt: []const u8) Self {
         return .{
+            .io = ln.io,
             .allocator = ln.allocator,
             .ln = ln,
 
@@ -184,7 +186,8 @@ pub const LinenoiseState = struct {
                 }
 
                 // Read next key
-                const nread = try self.stdin.read(&input_buf);
+                var stdin_reader = self.stdin.reader(self.io, &.{});
+                const nread = try stdin_reader.interface.readSliceShort(&input_buf);
                 c = if (nread == 1) input_buf[0] else return error.NothingRead;
 
                 switch (c.?) {
@@ -229,9 +232,8 @@ pub const LinenoiseState = struct {
     }
 
     fn refreshSingleLine(self: *Self) !void {
-        var buf: [1024]u8 = undefined;
-        var stdout_writer = self.stdout.writer(&buf);
-        const writer = &stdout_writer.interface;
+        var stdout_fw = self.stdout.writer(self.io, &.{});
+        var writer = &stdout_fw.interface;
 
         const hint = try self.getHint();
         defer if (hint) |str| self.allocator.free(str);
@@ -315,9 +317,8 @@ pub const LinenoiseState = struct {
     }
 
     fn refreshMultiLine(self: *Self) !void {
-        var buf: [1024]u8 = undefined;
-        var stdout_writer = self.stdout.writer(&buf);
-        const writer = &stdout_writer.interface;
+        var stdout_fw = self.stdout.writer(self.io, &.{});
+        var writer = &stdout_fw.interface;
 
         const hint = try self.getHint();
         defer if (hint) |str| self.allocator.free(str);

@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const File = std.fs.File;
+const File = std.Io.File;
 
 const unsupported_term = [_][]const u8{ "dumb", "cons25", "emacs" };
 
@@ -86,14 +86,14 @@ pub fn disableRawMode(in: File, out: File, orig: termios) void {
     }
 }
 
-fn getCursorPosition(in: File, out: File) !usize {
+fn getCursorPosition(io: std.Io, in: File, out: File) !usize {
     var buf: [32]u8 = undefined;
-    var in_reader = in.reader(&buf);
-    var reader = &in_reader.interface;
+    var in_fw = in.reader(io, &buf);
+    var reader = &in_fw.interface;
 
     var out_buf: [1024]u8 = undefined;
-    var out_writer = out.writer(&out_buf);
-    const writer = &out_writer.interface;
+    var out_fw = out.writer(io, &out_buf);
+    var writer = &out_fw.interface;
     // Tell terminal to report cursor to in
     try writer.writeAll("\x1B[6n");
     try writer.flush();
@@ -112,21 +112,22 @@ fn getCursorPosition(in: File, out: File) !usize {
     return try std.fmt.parseInt(usize, x, 10);
 }
 
-fn getColumnsFallback(in: File, out: File) !usize {
+fn getColumnsFallback(io: std.Io, in: File, out: File) !usize {
     var buf: [1024]u8 = undefined;
-    var out_writer = out.writer(&buf);
-    const writer = &out_writer.interface;
-    const orig_cursor_pos = try getCursorPosition(in, out);
+    var stdout_fw = out.writer(io, &buf);
+    var writer = &stdout_fw.interface;
+
+    const orig_cursor_pos = try getCursorPosition(io, in, out);
 
     try writer.print("\x1B[999C", .{});
-    const cols = try getCursorPosition(in, out);
+    const cols = try getCursorPosition(io, in, out);
 
     try writer.print("\x1B[{}D", .{orig_cursor_pos});
 
     return cols;
 }
 
-pub fn getColumns(in: File, out: File) !usize {
+pub fn getColumns(io: std.Io, in: File, out: File) !usize {
     switch (builtin.os.tag) {
         .windows => {
             var csbi: w.CONSOLE_SCREEN_BUFFER_INFO = undefined;
@@ -145,7 +146,7 @@ pub fn getColumns(in: File, out: File) !usize {
             if (std.posix.errno(err) == .SUCCESS and winsize.col > 0) {
                 return winsize.col;
             } else {
-                return try getColumnsFallback(in, out);
+                return try getColumnsFallback(io, in, out);
             }
         },
     }
@@ -153,7 +154,7 @@ pub fn getColumns(in: File, out: File) !usize {
 
 pub fn clearScreen() !void {
     var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    var stderr_writer = File.stderr().writer(&stderr_buffer);
     const writer = &stderr_writer.interface;
     try writer.writeAll("\x1b[H\x1b[2J");
     try writer.flush();
@@ -161,7 +162,7 @@ pub fn clearScreen() !void {
 
 pub fn beep() !void {
     var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    var stderr_writer = File.stderr().writer(&stderr_buffer);
     const writer = &stderr_writer.interface;
     try writer.writeAll("\x07");
     try writer.flush();

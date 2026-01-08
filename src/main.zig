@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
-const File = std.fs.File;
+const File = std.Io.File;
 
 const LinenoiseState = @import("state.zig").LinenoiseState;
 pub const History = @import("history.zig").History;
@@ -199,6 +199,7 @@ fn linenoiseNoTTY(allocator: Allocator, stdin: File) !?[]const u8 {
 }
 
 pub const Linenoise = struct {
+    io: std.Io,
     allocator: Allocator,
     history: History,
     multiline_mode: bool = false,
@@ -209,34 +210,35 @@ pub const Linenoise = struct {
     completions_callback: ?CompletionsCallback = null,
     stdin_file: File,
     stdout_file: File,
-    stdin_reader: std.fs.File.Reader,
-    stdout_writer: std.fs.File.Writer,
+    stdin_reader: File.Reader,
+    stdout_writer: File.Writer,
     /// Go to a new line after linenoise finishes (default is true)
     print_newline: bool = true,
 
     const Self = @This();
 
     /// Initialize a linenoise struct
-    pub fn init(allocator: Allocator) Self {
-        return initWithFiles(allocator, std.fs.File.stdin(), std.fs.File.stdout());
+    pub fn init(io: std.Io, allocator: Allocator) !Self {
+        return try initWithFiles(io, allocator, File.stdin(), File.stdout());
     }
 
     /// Initialize a linenoise struct with specific input and output streams
     /// Use this method to connect linenoise to the files of your choosing
     /// like /dev/tty on Linux or \\.\CONIN$ on Windows
-    pub fn initWithFiles(allocator: Allocator, input: std.fs.File, output: std.fs.File) Self {
+    pub fn initWithFiles(io: std.Io, allocator: Allocator, input: File, output: File) !Self {
         const max_buf_len = 1024;
         const stdin_buf = allocator.alloc(u8, max_buf_len) catch unreachable;
         const stdout_buf = allocator.alloc(u8, max_buf_len) catch unreachable;
         var self = Self{
+            .io = io,
             .allocator = allocator,
-            .history = History.empty(allocator),
+            .history = History.empty(io, allocator),
             .stdin_file = input,
             .stdout_file = output,
-            .stdin_reader = input.reader(stdin_buf),
-            .stdout_writer = output.writer(stdout_buf),
+            .stdin_reader = input.reader(io, stdin_buf),
+            .stdout_writer = output.writer(io, stdout_buf),
         };
-        self.examineStdIo();
+        try self.examineStdIo();
         return self;
     }
 
@@ -250,8 +252,8 @@ pub const Linenoise = struct {
     /// Re-examine (currently) stdin and environment variables to
     /// check if line editing and prompt printing should be
     /// enabled or not.
-    pub fn examineStdIo(self: *Self) void {
-        self.is_tty = self.stdin_file.isTty();
+    pub fn examineStdIo(self: *Self) !void {
+        self.is_tty = try self.stdin_file.isTty(self.io);
         self.term_supported = !isUnsupportedTerm(self.allocator);
     }
 
