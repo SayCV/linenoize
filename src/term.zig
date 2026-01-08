@@ -204,4 +204,4 @@ fn readWin32Console(self: File, buffer: []u8) !usize {
     return buffer.len - toRead;
 }
 
-// pub const read = if (is_windows) readWin32Console else File.read;
+pub const read = if (is_windows) readWin32Console else std.posix.read;
