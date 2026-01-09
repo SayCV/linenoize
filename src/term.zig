@@ -152,17 +152,17 @@ pub fn getColumns(io: std.Io, in: File, out: File) !usize {
     }
 }
 
-pub fn clearScreen() !void {
+pub fn clearScreen(io: std.Io) !void {
     var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer = File.stderr().writer(&stderr_buffer);
+    var stderr_writer = File.stderr().writer(io, &stderr_buffer);
     const writer = &stderr_writer.interface;
     try writer.writeAll("\x1b[H\x1b[2J");
     try writer.flush();
 }
 
-pub fn beep() !void {
+pub fn beep(io: std.Io) !void {
     var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer = File.stderr().writer(&stderr_buffer);
+    var stderr_writer = File.stderr().writer(io, &stderr_buffer);
     const writer = &stderr_writer.interface;
     try writer.writeAll("\x07");
     try writer.flush();
@@ -204,4 +204,4 @@ fn readWin32Console(self: File, buffer: []u8) !usize {
     return buffer.len - toRead;
 }
 
-pub const read = if (is_windows) readWin32Console else File.read;
+pub const read = if (is_windows) readWin32Console else std.posix.read;

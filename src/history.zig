@@ -2,6 +2,8 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
 
+const log = std.log.scoped(.ln_hist);
+
 const max_line_len = 4096;
 
 pub const History = struct {
@@ -60,16 +62,12 @@ pub const History = struct {
         const file = try std.Io.Dir.cwd().openFile(self.io, path, .{});
         defer file.close(self.io);
 
-        const buffer = try self.allocator.alloc(u8, max_line_len);
-        defer self.allocator.free(buffer);
-        var reader = file.reader(self.io, buffer);
-        while (reader.interface.takeDelimiterExclusive('\n')) |line| {
+        var reader = file.reader(self.io, &.{});
+        const contents = try reader.interface.allocRemaining(self.allocator, .limited(max_line_len));
+        defer self.allocator.free(contents);
+        var iter = std.mem.splitAny(u8, contents, "\n");
+        while (iter.next()) |line| {
             try self.hist.append(self.allocator, try self.allocator.dupe(u8, line));
-        } else |err| {
-            switch (err) {
-                error.EndOfStream => {},
-                else => return err,
-            }
         }
 
         self.truncate();
