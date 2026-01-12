@@ -189,16 +189,17 @@ fn linenoiseRaw(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]con
 
 /// Read a line with no special features (no hints, no completions, no history)
 fn linenoiseNoTTY(io: std.Io, allocator: Allocator, stdin: File) !?[]const u8 {
-    const max_line_len = std.math.maxInt(usize);
-    const buf = try allocator.alloc(u8, max_line_len);
-    var in_fw = stdin.reader(io, buf);
+    //const max_line_len: usize = if (try stdin.isTty(io)) std.math.maxInt(usize) else std.math.maxInt(u16);
+    //const buf = try allocator.alloc(u8, max_line_len);
+    var in_fw = stdin.reader(io, &.{});
     var term_reader = &in_fw.interface;
-    return term_reader.takeDelimiterInclusive(
+    const line = term_reader.takeDelimiterInclusive(
         '\n',
     ) catch |e| switch (e) {
         error.EndOfStream => return null,
         else => return e,
     };
+    return try allocator.dupe(u8, line);
 }
 
 pub const Linenoise = struct {
