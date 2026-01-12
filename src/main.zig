@@ -191,7 +191,8 @@ fn linenoiseRaw(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]con
 fn linenoiseNoTTY(io: std.Io, allocator: Allocator, stdin: File) !?[]const u8 {
     //const max_line_len: usize = if (try stdin.isTty(io)) std.math.maxInt(usize) else std.math.maxInt(u16);
     //const buf = try allocator.alloc(u8, max_line_len);
-    var in_fw = stdin.reader(io, &.{});
+    var read_buf: [1024]u8 = undefined;
+    var in_fw = stdin.reader(io, &read_buf);
     var term_reader = &in_fw.interface;
     const line = term_reader.takeDelimiterInclusive(
         '\n',
