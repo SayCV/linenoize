@@ -192,15 +192,16 @@ fn linenoiseNoTTY(io: std.Io, allocator: Allocator, stdin: File) !?[]const u8 {
     //const max_line_len: usize = if (try stdin.isTty(io)) std.math.maxInt(usize) else std.math.maxInt(u16);
     //const buf = try allocator.alloc(u8, max_line_len);
     var read_buf: [1024]u8 = undefined;
-    var in_fw = stdin.reader(io, &read_buf);
+    var in_fw = stdin.reader(io, &.{});
     var term_reader = &in_fw.interface;
-    const line = term_reader.takeDelimiterInclusive(
-        '\n',
+    const bytes_read = term_reader.readSliceShort(
+        &read_buf,
     ) catch |e| switch (e) {
-        error.EndOfStream => return null,
+        //error.EndOfStream => return null,
         else => return e,
     };
-    return try allocator.dupe(u8, line);
+    if (bytes_read == 0) return null;
+    return try allocator.dupe(u8, read_buf[0..bytes_read]);
 }
 
 pub const Linenoise = struct {
