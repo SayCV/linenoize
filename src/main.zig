@@ -187,10 +187,11 @@ fn linenoiseRaw(ln: *Linenoise, in: *Io.File.Reader, out: *Io.File.Writer, promp
 /// Read a line with no special features (no hints, no completions, no history)
 fn linenoiseNoTTY(io: std.Io, allocator: Allocator, stdin: *Io.File.Reader) !?[]const u8 {
     _ = io;
-    const line = stdin.interface.takeDelimiterInclusive('\n') catch |e| switch (e) {
+    const line = stdin.interface.takeDelimiterExclusive('\n') catch |e| switch (e) {
         error.EndOfStream => return null,
         else => return e,
     };
+    stdin.interface.toss(1);
     // if (line.len == 0) return null;
     return try allocator.dupe(u8, line);
 }
