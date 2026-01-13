@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
-const File = std.Io.File;
+const Io = std.Io;
 
 const LinenoiseState = @import("state.zig").LinenoiseState;
 pub const History = @import("history.zig").History;
@@ -38,13 +38,10 @@ fn editCsi(state: *LinenoiseState) !void {
     const in = state.stdin;
     var input_buf: [1]u8 = undefined;
 
-    var in_fw = in.reader(state.io, &input_buf);
-    var term_reader = &in_fw.interface;
-
-    if ((try term.read(in.handle, &input_buf)) < 1) return error.EndOfFile;
+    if ((try term.read(in.file.handle, &input_buf)) < 1) return error.EndOfFile;
     switch (input_buf[0]) {
         '0'...'9' => |num| {
-            if ((try term_reader.readSliceShort(&input_buf)) < 1) return error.EndOfFile;
+            if ((try in.interface.readSliceShort(&input_buf)) < 1) return error.EndOfFile;
             switch (input_buf[0]) {
                 '~' => switch (num) {
                     '1', '7' => try state.editMoveHome(),
@@ -54,10 +51,10 @@ fn editCsi(state: *LinenoiseState) !void {
                 },
                 ';' => switch (num) {
                     '1' => {
-                        if ((try term_reader.readSliceShort(&input_buf)) < 1) return error.EndOfFile;
+                        if ((try in.interface.readSliceShort(&input_buf)) < 1) return error.EndOfFile;
                         switch (input_buf[0]) {
                             '5' => {
-                                if ((try term.read(in.handle, &input_buf)) < 1) return error.EndOfFile;
+                                if ((try term.read(in.file.handle, &input_buf)) < 1) return error.EndOfFile;
                                 switch (input_buf[0]) {
                                     'C' => try state.editMoveWordEnd(), // ESC[1;5C = ctrl + right arrow
                                     'D' => try state.editMoveWordStart(), // ESC[1;5D = ctrl + left arrow
@@ -87,13 +84,13 @@ fn editEscape(state: *LinenoiseState) !void {
     const in = state.stdin;
     var input_buf: [1]u8 = undefined;
 
-    if ((try term.read(in.handle, &input_buf)) < 1) return error.EndOfFile;
+    if ((try term.read(in.file.handle, &input_buf)) < 1) return error.EndOfFile;
     switch (input_buf[0]) {
         'b' => try state.editMoveWordStart(),
         'f' => try state.editMoveWordEnd(),
         '[' => try editCsi(state),
         '0' => {
-            if ((try term.read(in.handle, &input_buf)) < 1) return error.EndOfFile;
+            if ((try term.read(in.file.handle, &input_buf)) < 1) return error.EndOfFile;
             switch (input_buf[0]) {
                 'H' => try state.editMoveHome(),
                 'F' => try state.editMoveEnd(),
@@ -104,7 +101,7 @@ fn editEscape(state: *LinenoiseState) !void {
     }
 }
 
-fn linenoiseEdit(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]const u8 {
+fn linenoiseEdit(ln: *Linenoise, in: *Io.File.Reader, out: *Io.File.Writer, prompt: []const u8) !?[]const u8 {
     var state = LinenoiseState.init(ln, in, out, prompt);
     defer state.buf.deinit(state.allocator);
 
@@ -114,7 +111,7 @@ fn linenoiseEdit(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]co
 
     while (true) {
         var input_buf: [1]u8 = undefined;
-        if ((try term.read(in.handle, &input_buf)) < 1) return null;
+        if ((try term.read(in.file.handle, &input_buf)) < 1) return null;
         var c = input_buf[0];
 
         // Browse completions before editing
@@ -163,7 +160,7 @@ fn linenoiseEdit(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]co
                 const utf8_len = std.unicode.utf8ByteSequenceLength(c) catch continue;
 
                 utf8_buf[0] = c;
-                if (utf8_len > 1 and (try term.read(in.handle, utf8_buf[1..utf8_len])) < utf8_len - 1) return null;
+                if (utf8_len > 1 and (try term.read(in.file.handle, utf8_buf[1..utf8_len])) < utf8_len - 1) return null;
 
                 try state.editInsert(utf8_buf[0..utf8_len]);
             },
@@ -173,11 +170,11 @@ fn linenoiseEdit(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]co
 
 /// Read a line with custom line editing mechanics. This includes hints,
 /// completions and history
-fn linenoiseRaw(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]const u8 {
+fn linenoiseRaw(ln: *Linenoise, in: *Io.File.Reader, out: *Io.File.Writer, prompt: []const u8) !?[]const u8 {
     defer {
         if (ln.print_newline) {
-            ln.stdout_writer.interface.writeAll("\n") catch {};
-            ln.stdout_writer.interface.flush() catch {};
+            ln.stdout.interface.writeAll("\n") catch {};
+            ln.stdout.interface.flush() catch {};
         }
     }
 
@@ -188,20 +185,14 @@ fn linenoiseRaw(ln: *Linenoise, in: File, out: File, prompt: []const u8) !?[]con
 }
 
 /// Read a line with no special features (no hints, no completions, no history)
-fn linenoiseNoTTY(io: std.Io, allocator: Allocator, stdin: File) !?[]const u8 {
-    //const max_line_len: usize = if (try stdin.isTty(io)) std.math.maxInt(usize) else std.math.maxInt(u16);
-    //const buf = try allocator.alloc(u8, max_line_len);
-    var read_buf: [1024]u8 = undefined;
-    var in_fw = stdin.reader(io, &.{});
-    var term_reader = &in_fw.interface;
-    const bytes_read = term_reader.readSliceShort(
-        &read_buf,
-    ) catch |e| switch (e) {
-        //error.EndOfStream => return null,
+fn linenoiseNoTTY(io: std.Io, allocator: Allocator, stdin: *Io.File.Reader) !?[]const u8 {
+    _ = io;
+    const line = stdin.interface.takeDelimiterInclusive('\n') catch |e| switch (e) {
+        error.EndOfStream => return null,
         else => return e,
     };
-    if (bytes_read == 0) return null;
-    return try allocator.dupe(u8, read_buf[0..bytes_read]);
+    // if (line.len == 0) return null;
+    return try allocator.dupe(u8, line);
 }
 
 pub const Linenoise = struct {
@@ -214,10 +205,8 @@ pub const Linenoise = struct {
     term_supported: bool = false,
     hints_callback: ?HintsCallback = null,
     completions_callback: ?CompletionsCallback = null,
-    stdin_file: File,
-    stdout_file: File,
-    stdin_reader: File.Reader,
-    stdout_writer: File.Writer,
+    stdin: *Io.File.Reader,
+    stdout: *Io.File.Writer,
     /// Go to a new line after linenoise finishes (default is true)
     print_newline: bool = true,
 
@@ -225,24 +214,21 @@ pub const Linenoise = struct {
 
     /// Initialize a linenoise struct
     pub fn init(io: std.Io, allocator: Allocator) !Self {
-        return try initWithFiles(io, allocator, File.stdin(), File.stdout());
+        var stdin_reader = std.Io.File.stdin().reader(io, &.{});
+        var stdout_writer = std.Io.File.stdout().writer(io, &.{});
+        return try initWithFiles(io, allocator, &stdin_reader, &stdout_writer);
     }
 
     /// Initialize a linenoise struct with specific input and output streams
     /// Use this method to connect linenoise to the files of your choosing
     /// like /dev/tty on Linux or \\.\CONIN$ on Windows
-    pub fn initWithFiles(io: std.Io, allocator: Allocator, input: File, output: File) !Self {
-        const max_buf_len = 1024;
-        const stdin_buf = allocator.alloc(u8, max_buf_len) catch unreachable;
-        const stdout_buf = allocator.alloc(u8, max_buf_len) catch unreachable;
+    pub fn initWithFiles(io: std.Io, allocator: Allocator, input: *Io.File.Reader, output: *Io.File.Writer) !Self {
         var self = Self{
             .io = io,
             .allocator = allocator,
             .history = History.empty(io, allocator),
-            .stdin_file = input,
-            .stdout_file = output,
-            .stdin_reader = input.reader(io, stdin_buf),
-            .stdout_writer = output.writer(io, stdout_buf),
+            .stdin = input,
+            .stdout = output,
         };
         try self.examineStdIo();
         return self;
@@ -251,29 +237,27 @@ pub const Linenoise = struct {
     /// Free all resources occupied by this struct
     pub fn deinit(self: *Self) void {
         self.history.deinit();
-        self.allocator.free(self.stdin_reader.interface.buffer);
-        self.allocator.free(self.stdout_writer.interface.buffer);
     }
 
     /// Re-examine (currently) stdin and environment variables to
     /// check if line editing and prompt printing should be
     /// enabled or not.
     pub fn examineStdIo(self: *Self) !void {
-        self.is_tty = try self.stdin_file.isTty(self.io);
+        self.is_tty = try self.stdin.file.isTty(self.io);
         self.term_supported = !isUnsupportedTerm(self.allocator);
     }
 
     /// Reads a line from the terminal. Caller owns returned memory
     pub fn linenoise(self: *Self, prompt: []const u8) !?[]const u8 {
         if (self.is_tty and !self.term_supported) {
-            try self.stdout_writer.interface.writeAll(prompt);
-            try self.stdout_writer.interface.flush();
+            try self.stdout.interface.writeAll(prompt);
+            try self.stdout.interface.flush();
         }
 
         return if (self.is_tty and self.term_supported)
-            try linenoiseRaw(self, self.stdin_file, self.stdout_file, prompt)
+            try linenoiseRaw(self, self.stdin, self.stdout, prompt)
         else
-            try linenoiseNoTTY(self.io, self.allocator, self.stdin_file);
+            try linenoiseNoTTY(self.io, self.allocator, self.stdin);
     }
 };
 

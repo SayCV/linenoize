@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const ArrayList = std.ArrayList;
-const File = std.Io.File;
+const Io = std.Io;
 const math = std.math;
 
 const Linenoise = @import("main.zig").Linenoise;
@@ -120,8 +120,8 @@ pub const LinenoiseState = struct {
     allocator: Allocator,
     ln: *Linenoise,
 
-    stdin: File,
-    stdout: File,
+    stdin: *Io.File.Reader,
+    stdout: *Io.File.Writer,
     buf: ArrayList(u8) = .empty,
     prompt: []const u8,
     pos: usize = 0,
@@ -131,7 +131,7 @@ pub const LinenoiseState = struct {
 
     const Self = @This();
 
-    pub fn init(ln: *Linenoise, in: File, out: File, prompt: []const u8) Self {
+    pub fn init(ln: *Linenoise, in: *Io.File.Reader, out: *Io.File.Writer, prompt: []const u8) Self {
         return .{
             .io = ln.io,
             .allocator = ln.allocator,
@@ -186,8 +186,7 @@ pub const LinenoiseState = struct {
                 }
 
                 // Read next key
-                var stdin_reader = self.stdin.reader(self.io, &.{});
-                const nread = try stdin_reader.interface.readSliceShort(&input_buf);
+                const nread = try self.stdin.interface.readSliceShort(&input_buf);
                 c = if (nread == 1) input_buf[0] else return error.NothingRead;
 
                 switch (c.?) {
@@ -232,8 +231,9 @@ pub const LinenoiseState = struct {
     }
 
     fn refreshSingleLine(self: *Self) !void {
-        var stdout_fw = self.stdout.writer(self.io, &.{});
-        var writer = &stdout_fw.interface;
+        var stdout_buffer: [1024]u8 = undefined;
+        var stdout_writer = Io.File.stdout().writer(self.io, &stdout_buffer);
+        var writer = &stdout_writer.interface;
 
         const hint = try self.getHint();
         defer if (hint) |str| self.allocator.free(str);
@@ -317,8 +317,9 @@ pub const LinenoiseState = struct {
     }
 
     fn refreshMultiLine(self: *Self) !void {
-        var stdout_fw = self.stdout.writer(self.io, &.{});
-        var writer = &stdout_fw.interface;
+        var stdout_buffer: [1024]u8 = undefined;
+        var stdout_writer = Io.File.stdout().writer(self.io, &stdout_buffer);
+        var writer = &stdout_writer.interface;
 
         const hint = try self.getHint();
         defer if (hint) |str| self.allocator.free(str);

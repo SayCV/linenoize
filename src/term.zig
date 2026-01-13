@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const File = std.Io.File;
+const Io = std.Io;
 
 const unsupported_term = [_][]const u8{ "dumb", "cons25", "emacs" };
 
@@ -31,7 +31,7 @@ pub extern "kernel32" fn SetConsoleCP(wCodePageID: w.UINT) callconv(.winapi) w.B
 pub extern "kernel32" fn PeekConsoleInputW(hConsoleInput: w.HANDLE, lpBuffer: [*]INPUT_RECORD, nLength: w.DWORD, lpNumberOfEventsRead: ?*w.DWORD) callconv(.winapi) w.BOOL;
 pub extern "kernel32" fn ReadConsoleW(hConsoleInput: w.HANDLE, lpBuffer: [*]u16, nNumberOfCharsToRead: w.DWORD, lpNumberOfCharsRead: ?*w.DWORD, lpReserved: ?*anyopaque) callconv(.winapi) w.BOOL;
 
-pub fn enableRawMode(in: File, out: File) !termios {
+pub fn enableRawMode(in: *Io.File.Reader, out: *Io.File.Writer) !termios {
     if (is_windows) {
         var result: termios = .{
             .inMode = 0,
@@ -39,17 +39,17 @@ pub fn enableRawMode(in: File, out: File) !termios {
         };
         var irec: [1]INPUT_RECORD = undefined;
         var n: w.DWORD = 0;
-        if (PeekConsoleInputW(in.handle, &irec, 1, &n) == 0 or
-            k32.GetConsoleMode(in.handle, &result.inMode) == 0 or
-            k32.GetConsoleMode(out.handle, &result.outMode) == 0)
+        if (PeekConsoleInputW(in.file.handle, &irec, 1, &n) == 0 or
+            k32.GetConsoleMode(in.file.handle, &result.inMode) == 0 or
+            k32.GetConsoleMode(out.file.handle, &result.outMode) == 0)
             return error.InitFailed;
-        _ = k32.SetConsoleMode(in.handle, ENABLE_VIRTUAL_TERMINAL_INPUT);
-        _ = k32.SetConsoleMode(out.handle, result.outMode | w.ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+        _ = k32.SetConsoleMode(in.file.handle, ENABLE_VIRTUAL_TERMINAL_INPUT);
+        _ = k32.SetConsoleMode(out.file.handle, result.outMode | w.ENABLE_VIRTUAL_TERMINAL_PROCESSING);
         _ = SetConsoleCP(CP_UTF8);
         _ = k32.SetConsoleOutputCP(CP_UTF8);
         return result;
     } else {
-        const orig = try std.posix.tcgetattr(in.handle);
+        const orig = try std.posix.tcgetattr(in.file.handle);
         var raw = orig;
 
         raw.iflag.BRKINT = false;
@@ -71,35 +71,31 @@ pub fn enableRawMode(in: File, out: File) !termios {
         // raw.cc[std.os.VMIN] = 1;
         // raw.cc[std.os.VTIME] = 0;
 
-        try std.posix.tcsetattr(in.handle, std.posix.TCSA.FLUSH, raw);
+        try std.posix.tcsetattr(in.file.handle, std.posix.TCSA.FLUSH, raw);
 
         return orig;
     }
 }
 
-pub fn disableRawMode(in: File, out: File, orig: termios) void {
+pub fn disableRawMode(in: *Io.File.Reader, out: *Io.File.Writer, orig: termios) void {
     if (is_windows) {
-        _ = k32.SetConsoleMode(in.handle, orig.inMode);
-        _ = k32.SetConsoleMode(out.handle, orig.outMode);
+        _ = k32.SetConsoleMode(in.file.handle, orig.inMode);
+        _ = k32.SetConsoleMode(out.file.handle, orig.outMode);
     } else {
-        std.posix.tcsetattr(in.handle, std.posix.TCSA.FLUSH, orig) catch {};
+        std.posix.tcsetattr(in.file.handle, std.posix.TCSA.FLUSH, orig) catch {};
     }
 }
 
-fn getCursorPosition(io: std.Io, in: File, out: File) !usize {
-    var buf: [32]u8 = undefined;
-    var in_fw = in.reader(io, &buf);
-    var reader = &in_fw.interface;
-
-    var out_buf: [1024]u8 = undefined;
-    var out_fw = out.writer(io, &out_buf);
-    var writer = &out_fw.interface;
+fn getCursorPosition(io: std.Io, in: *Io.File.Reader, out: *Io.File.Writer) !usize {
+    _ = io;
+    var reader = in.interface;
+    var writer = out.interface;
     // Tell terminal to report cursor to in
     try writer.writeAll("\x1B[6n");
     try writer.flush();
 
     // Read answer
-    const answer = (try reader.takeDelimiterInclusive('R'));
+    const answer = try reader.takeDelimiterInclusive('R');
 
     // Parse answer
     if (!std.mem.startsWith(u8, "\x1B[", answer))
@@ -112,10 +108,8 @@ fn getCursorPosition(io: std.Io, in: File, out: File) !usize {
     return try std.fmt.parseInt(usize, x, 10);
 }
 
-fn getColumnsFallback(io: std.Io, in: File, out: File) !usize {
-    var buf: [1024]u8 = undefined;
-    var stdout_fw = out.writer(io, &buf);
-    var writer = &stdout_fw.interface;
+fn getColumnsFallback(io: std.Io, in: *Io.File.Reader, out: *Io.File.Writer) !usize {
+    var writer = out.interface;
 
     const orig_cursor_pos = try getCursorPosition(io, in, out);
 
@@ -127,11 +121,11 @@ fn getColumnsFallback(io: std.Io, in: File, out: File) !usize {
     return cols;
 }
 
-pub fn getColumns(io: std.Io, in: File, out: File) !usize {
+pub fn getColumns(io: std.Io, in: *Io.File.Reader, out: *Io.File.Writer) !usize {
     switch (builtin.os.tag) {
         .windows => {
             var csbi: w.CONSOLE_SCREEN_BUFFER_INFO = undefined;
-            _ = k32.GetConsoleScreenBufferInfo(out.handle, &csbi);
+            _ = k32.GetConsoleScreenBufferInfo(out.file.handle, &csbi);
             return @intCast(csbi.dwSize.X);
         },
         else => {
@@ -142,7 +136,7 @@ pub fn getColumns(io: std.Io, in: File, out: File) !usize {
                 .ypixel = 0,
             };
 
-            const err = std.posix.system.ioctl(in.handle, std.posix.T.IOCGWINSZ, @intFromPtr(&winsize));
+            const err = std.posix.system.ioctl(in.file.handle, std.posix.T.IOCGWINSZ, @intFromPtr(&winsize));
             if (std.posix.errno(err) == .SUCCESS and winsize.col > 0) {
                 return winsize.col;
             } else {
@@ -153,16 +147,14 @@ pub fn getColumns(io: std.Io, in: File, out: File) !usize {
 }
 
 pub fn clearScreen(io: std.Io) !void {
-    var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer = File.stderr().writer(io, &stderr_buffer);
+    var stderr_writer = Io.File.stderr().writer(io, &.{});
     const writer = &stderr_writer.interface;
     try writer.writeAll("\x1b[H\x1b[2J");
     try writer.flush();
 }
 
 pub fn beep(io: std.Io) !void {
-    var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer = File.stderr().writer(io, &stderr_buffer);
+    var stderr_writer = Io.File.stderr().writer(io, &.{});
     const writer = &stderr_writer.interface;
     try writer.writeAll("\x07");
     try writer.flush();
@@ -172,7 +164,7 @@ var utf8ConsoleBuffer = [_]u8{0} ** 10;
 var utf8ConsoleReadBytes: usize = 0;
 
 // this is needed due to a bug in win32 console: https://github.com/microsoft/terminal/issues/4551
-fn readWin32Console(self: File, buffer: []u8) !usize {
+fn readWin32Console(self: *Io.File.Reader, buffer: []u8) !usize {
     var toRead = buffer.len;
     while (toRead > 0) {
         if (utf8ConsoleReadBytes > 0) {
@@ -186,13 +178,13 @@ fn readWin32Console(self: File, buffer: []u8) !usize {
         }
         var charsRead: w.DWORD = 0;
         var wideBuf: [2]w.WCHAR = undefined;
-        if (ReadConsoleW(self.handle, &wideBuf, 1, &charsRead, null) == 0)
+        if (ReadConsoleW(self.file.handle, &wideBuf, 1, &charsRead, null) == 0)
             return 0;
         if (charsRead == 0)
             break;
         const wideBufLen: u8 = if (wideBuf[0] >= 0xD800 and wideBuf[0] <= 0xDBFF) _: {
             // read surrogate
-            if (ReadConsoleW(self.handle, wideBuf[1..], 1, &charsRead, null) == 0)
+            if (ReadConsoleW(self.file.handle, wideBuf[1..], 1, &charsRead, null) == 0)
                 return 0;
             if (charsRead == 0)
                 break;
