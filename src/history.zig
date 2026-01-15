@@ -7,6 +7,7 @@ const log = std.log.scoped(.ln_hist);
 const max_line_len = 4096;
 
 pub const History = struct {
+    init: std.process.Init,
     io: std.Io,
     allocator: Allocator,
     hist: ArrayList([]const u8) = .empty,
@@ -16,9 +17,10 @@ pub const History = struct {
     const Self = @This();
 
     /// Creates a new empty history
-    pub fn empty(io: std.Io, allocator: Allocator) Self {
+    pub fn empty(init: std.process.Init, allocator: Allocator) Self {
         return .{
-            .io = io,
+            .init = init,
+            .io = init.io,
             .allocator = allocator,
         };
     }

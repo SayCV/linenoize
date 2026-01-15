@@ -185,8 +185,8 @@ fn linenoiseRaw(ln: *Linenoise, in: *Io.File.Reader, out: *Io.File.Writer, promp
 }
 
 /// Read a line with no special features (no hints, no completions, no history)
-fn linenoiseNoTTY(io: std.Io, allocator: Allocator, stdin: *Io.File.Reader) !?[]const u8 {
-    _ = io;
+fn linenoiseNoTTY(init: std.process.Init, allocator: Allocator, stdin: *Io.File.Reader) !?[]const u8 {
+    _ = init;
     const line = stdin.interface.takeDelimiterExclusive('\n') catch |e| switch (e) {
         error.EndOfStream => return null,
         else => return e,
@@ -197,7 +197,7 @@ fn linenoiseNoTTY(io: std.Io, allocator: Allocator, stdin: *Io.File.Reader) !?[]
 }
 
 pub const Linenoise = struct {
-    io: std.Io,
+    init: std.process.Init,
     allocator: Allocator,
     history: History,
     multiline_mode: bool = false,
@@ -214,20 +214,20 @@ pub const Linenoise = struct {
     const Self = @This();
 
     /// Initialize a linenoise struct
-    pub fn init(io: std.Io, allocator: Allocator) !Self {
-        var stdin_reader = std.Io.File.stdin().reader(io, &.{});
-        var stdout_writer = std.Io.File.stdout().writer(io, &.{});
-        return try initWithFiles(io, allocator, &stdin_reader, &stdout_writer);
+    pub fn initDefault(init: std.process.Init, allocator: Allocator) !Self {
+        var stdin_reader = std.Io.File.stdin().reader(init.io, &.{});
+        var stdout_writer = std.Io.File.stdout().writer(init.io, &.{});
+        return try initWithFiles(init, allocator, &stdin_reader, &stdout_writer);
     }
 
     /// Initialize a linenoise struct with specific input and output streams
     /// Use this method to connect linenoise to the files of your choosing
     /// like /dev/tty on Linux or \\.\CONIN$ on Windows
-    pub fn initWithFiles(io: std.Io, allocator: Allocator, input: *Io.File.Reader, output: *Io.File.Writer) !Self {
+    pub fn initWithFiles(init: std.process.Init, allocator: Allocator, input: *Io.File.Reader, output: *Io.File.Writer) !Self {
         var self = Self{
-            .io = io,
+            .init = init,
             .allocator = allocator,
-            .history = History.empty(io, allocator),
+            .history = History.empty(init, allocator),
             .stdin = input,
             .stdout = output,
         };
@@ -244,8 +244,8 @@ pub const Linenoise = struct {
     /// check if line editing and prompt printing should be
     /// enabled or not.
     pub fn examineStdIo(self: *Self) !void {
-        self.is_tty = try self.stdin.file.isTty(self.io);
-        self.term_supported = !isUnsupportedTerm(self.allocator);
+        self.is_tty = try self.stdin.file.isTty(self.init.io);
+        self.term_supported = !isUnsupportedTerm(self.init, self.allocator);
     }
 
     /// Reads a line from the terminal. Caller owns returned memory
@@ -258,7 +258,7 @@ pub const Linenoise = struct {
         return if (self.is_tty and self.term_supported)
             try linenoiseRaw(self, self.stdin, self.stdout, prompt)
         else
-            try linenoiseNoTTY(self.io, self.allocator, self.stdin);
+            try linenoiseNoTTY(self.init, self.allocator, self.stdin);
     }
 };
 

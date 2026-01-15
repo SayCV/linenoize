@@ -7,8 +7,10 @@ const unsupported_term = [_][]const u8{ "dumb", "cons25", "emacs" };
 const is_windows = builtin.os.tag == .windows;
 const termios = if (!is_windows) std.posix.termios else struct { inMode: w.DWORD, outMode: w.DWORD };
 
-pub fn isUnsupportedTerm(allocator: std.mem.Allocator) bool {
-    const env_var = std.process.getEnvVarOwned(allocator, "TERM") catch return false;
+pub fn isUnsupportedTerm(init: std.process.Init, allocator: std.mem.Allocator) bool {
+    const env_map = init.environ_map;
+    defer env_map.deinit();
+    const env_var = env_map.get("TERM") orelse return false;
     defer allocator.free(env_var);
     return for (unsupported_term) |t| {
         if (std.ascii.eqlIgnoreCase(env_var, t))

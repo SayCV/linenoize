@@ -133,14 +133,14 @@ pub const LinenoiseState = struct {
 
     pub fn init(ln: *Linenoise, in: *Io.File.Reader, out: *Io.File.Writer, prompt: []const u8) Self {
         return .{
-            .io = ln.io,
+            .io = ln.init.io,
             .allocator = ln.allocator,
             .ln = ln,
 
             .stdin = in,
             .stdout = out,
             .prompt = prompt,
-            .cols = getColumns(ln.io, in, out) catch 80,
+            .cols = getColumns(ln.init.io, in, out) catch 80,
         };
     }
 
