@@ -214,20 +214,20 @@ pub const Linenoise = struct {
     const Self = @This();
 
     /// Initialize a linenoise struct
-    pub fn initDefault(init: std.process.Init, io: std.Io, allocator: Allocator) !Self {
-        var stdin_reader = std.Io.File.stdin().readerStreaming(io, &.{});
-        var stdout_writer = std.Io.File.stdout().writerStreaming(io, &.{});
-        return try initWithFiles(init, io, allocator, &stdin_reader, &stdout_writer);
+    pub fn initDefault(init: std.process.Init) !Self {
+        var stdin_reader = std.Io.File.stdin().readerStreaming(init.io, &.{});
+        var stdout_writer = std.Io.File.stdout().writerStreaming(init.io, &.{});
+        return try initWithFiles(init, &stdin_reader, &stdout_writer);
     }
 
     /// Initialize a linenoise struct with specific input and output streams
     /// Use this method to connect linenoise to the files of your choosing
     /// like /dev/tty on Linux or \\.\CONIN$ on Windows
-    pub fn initWithFiles(init: std.process.Init, io: std.Io, allocator: Allocator, input: *Io.File.Reader, output: *Io.File.Writer) !Self {
+    pub fn initWithFiles(init: std.process.Init, input: *Io.File.Reader, output: *Io.File.Writer) !Self {
         var self = Self{
             .init = init,
-            .allocator = allocator,
-            .history = History.empty(init, io, allocator),
+            .allocator = init.gpa,
+            .history = History.empty(init),
             .stdin = input,
             .stdout = output,
         };
