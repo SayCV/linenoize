@@ -17,10 +17,10 @@ pub const History = struct {
     const Self = @This();
 
     /// Creates a new empty history
-    pub fn empty(init: std.process.Init, allocator: Allocator) Self {
+    pub fn empty(init: std.process.Init, io: std.Io, allocator: Allocator) Self {
         return .{
             .init = init,
-            .io = init.io,
+            .io = io,
             .allocator = allocator,
         };
     }
