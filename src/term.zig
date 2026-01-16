@@ -166,7 +166,7 @@ var utf8ConsoleBuffer = [_]u8{0} ** 10;
 var utf8ConsoleReadBytes: usize = 0;
 
 // this is needed due to a bug in win32 console: https://github.com/microsoft/terminal/issues/4551
-fn readWin32Console(self: *Io.File.Reader, buffer: []u8) !usize {
+fn readWin32Console(self: Io.File.Handle, buffer: []u8) !usize {
     var toRead = buffer.len;
     while (toRead > 0) {
         if (utf8ConsoleReadBytes > 0) {
@@ -180,13 +180,13 @@ fn readWin32Console(self: *Io.File.Reader, buffer: []u8) !usize {
         }
         var charsRead: w.DWORD = 0;
         var wideBuf: [2]w.WCHAR = undefined;
-        if (ReadConsoleW(self.file.handle, &wideBuf, 1, &charsRead, null) == 0)
+        if (ReadConsoleW(self, &wideBuf, 1, &charsRead, null) == 0)
             return 0;
         if (charsRead == 0)
             break;
         const wideBufLen: u8 = if (wideBuf[0] >= 0xD800 and wideBuf[0] <= 0xDBFF) _: {
             // read surrogate
-            if (ReadConsoleW(self.file.handle, wideBuf[1..], 1, &charsRead, null) == 0)
+            if (ReadConsoleW(self, wideBuf[1..], 1, &charsRead, null) == 0)
                 return 0;
             if (charsRead == 0)
                 break;
