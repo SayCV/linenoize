@@ -162,7 +162,7 @@ pub fn beep(io: std.Io) !void {
     try writer.flush();
 }
 
-var utf8ConsoleBuffer = [_]u8{0} ** 10;
+var utf8ConsoleBuffer = [_]u8{0} * *10;
 var utf8ConsoleReadBytes: usize = 0;
 
 // this is needed due to a bug in win32 console: https://github.com/microsoft/terminal/issues/4551

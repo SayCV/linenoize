@@ -169,7 +169,7 @@ pub const LinenoiseState = struct {
                     const old_pos = self.pos;
 
                     // Show suggested completion
-                    self.buf = .{};
+                    self.buf = .empty;
                     try self.buf.appendSlice(self.allocator, completions[i]);
                     self.pos = self.buf.items.len;
 
@@ -208,7 +208,7 @@ pub const LinenoiseState = struct {
                             // Replace buffer with text in the selected
                             // completion
                             self.buf.deinit(self.allocator);
-                            self.buf = .{};
+                            self.buf = .empty;
                             try self.buf.appendSlice(self.allocator, completions[i]);
 
                             self.pos = self.buf.items.len;
