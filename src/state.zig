@@ -509,7 +509,7 @@ pub const LinenoiseState = struct {
 
             // Copy history entry to the current line buffer
             self.buf.deinit(self.allocator);
-            self.buf = .{};
+            self.buf = .empty;
             try self.buf.appendSlice(self.allocator, self.ln.history.hist.items[new_index]);
             self.pos = self.buf.items.len;
 
