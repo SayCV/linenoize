@@ -3,8 +3,12 @@
     .fingerprint = 0xfa03aea2f0cab127,
     .version = "0.1.1",
     .dependencies = .{
+        .zigwin32 = .{
+            .path = "../zigwin32",
+            //.hash = "zigwin32-25.0.28-preview-AAAAAICM5AMResOGQnQ85mfe60TTOQeMtt7GRATUOKoP",
+        },
         .wcwidth = .{
-            .path = "../../zig-depends-build/.download/zig-wcwidth",
+            .path = "../.download/zig-wcwidth",
             //.hash = "wcwidth-0.1.0-A4Aa6gjnAAAQr7TohWS9M7qpfH5-OUF5YN3wjR7VNy97",
         },
     },

@@ -1,6 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Io = std.Io;
+const win32 = @import("zigwin32");
 
 const unsupported_term = [_][]const u8{ "dumb", "cons25", "emacs" };
 
@@ -27,11 +28,15 @@ const INPUT_RECORD = extern struct {
     _ignored: [16]u8,
 };
 
-const k32 = std.os.windows.kernel32;
+const k32 = win32.everything;
 
 pub extern "kernel32" fn SetConsoleCP(wCodePageID: w.UINT) callconv(.winapi) w.BOOL;
 pub extern "kernel32" fn PeekConsoleInputW(hConsoleInput: w.HANDLE, lpBuffer: [*]INPUT_RECORD, nLength: w.DWORD, lpNumberOfEventsRead: ?*w.DWORD) callconv(.winapi) w.BOOL;
 pub extern "kernel32" fn ReadConsoleW(hConsoleInput: w.HANDLE, lpBuffer: [*]u16, nNumberOfCharsToRead: w.DWORD, lpNumberOfCharsRead: ?*w.DWORD, lpReserved: ?*anyopaque) callconv(.winapi) w.BOOL;
+pub extern "kernel32" fn GetConsoleMode(hConsoleHandle: w.HANDLE, lpMode: *w.DWORD) callconv(.winapi) w.BOOL;
+pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: w.HANDLE, dwMode: w.DWORD) callconv(.winapi) w.BOOL;
+pub extern "kernel32" fn SetConsoleOutputCP(wCodePageID: w.UINT) callconv(.winapi) w.BOOL;
+pub extern "kernel32" fn GetConsoleScreenBufferInfo(hConsoleOutput: w.HANDLE, lpConsoleScreenBufferInfo: *w.CONSOLE_SCREEN_BUFFER_INFO) callconv(.winapi) w.BOOL;
 
 pub fn enableRawMode(in: *Io.File.Reader, out: *Io.File.Writer) !termios {
     if (is_windows) {
@@ -39,15 +44,15 @@ pub fn enableRawMode(in: *Io.File.Reader, out: *Io.File.Writer) !termios {
             .inMode = 0,
             .outMode = 0,
         };
-        var irec: [1]INPUT_RECORD = undefined;
+        var irec: [1]k32.INPUT_RECORD = undefined;
         var n: w.DWORD = 0;
-        if (PeekConsoleInputW(in.file.handle, &irec, 1, &n) == 0 or
-            k32.GetConsoleMode(in.file.handle, &result.inMode) == 0 or
-            k32.GetConsoleMode(out.file.handle, &result.outMode) == 0)
+        if (k32.PeekConsoleInputW(in.file.handle, &irec, 1, &n) == 0 or
+            k32.GetConsoleMode(in.file.handle, @ptrCast(&result.inMode)) == 0 or
+            k32.GetConsoleMode(out.file.handle, @ptrCast(&result.outMode)) == 0)
             return error.InitFailed;
-        _ = k32.SetConsoleMode(in.file.handle, ENABLE_VIRTUAL_TERMINAL_INPUT);
-        _ = k32.SetConsoleMode(out.file.handle, result.outMode | w.ENABLE_VIRTUAL_TERMINAL_PROCESSING);
-        _ = SetConsoleCP(CP_UTF8);
+        _ = k32.SetConsoleMode(in.file.handle, k32.ENABLE_VIRTUAL_TERMINAL_INPUT);
+        _ = k32.SetConsoleMode(out.file.handle, @bitCast(result.outMode | @as(u32, @bitCast(k32.ENABLE_VIRTUAL_TERMINAL_PROCESSING))));
+        _ = k32.SetConsoleCP(CP_UTF8);
         _ = k32.SetConsoleOutputCP(CP_UTF8);
         return result;
     } else {
@@ -81,8 +86,8 @@ pub fn enableRawMode(in: *Io.File.Reader, out: *Io.File.Writer) !termios {
 
 pub fn disableRawMode(in: *Io.File.Reader, out: *Io.File.Writer, orig: termios) void {
     if (is_windows) {
-        _ = k32.SetConsoleMode(in.file.handle, orig.inMode);
-        _ = k32.SetConsoleMode(out.file.handle, orig.outMode);
+        _ = k32.SetConsoleMode(in.file.handle, @bitCast(orig.inMode));
+        _ = k32.SetConsoleMode(out.file.handle, @bitCast(orig.outMode));
     } else {
         std.posix.tcsetattr(in.file.handle, std.posix.TCSA.FLUSH, orig) catch {};
     }
@@ -126,7 +131,7 @@ fn getColumnsFallback(io: std.Io, in: *Io.File.Reader, out: *Io.File.Writer) !us
 pub fn getColumns(io: std.Io, in: *Io.File.Reader, out: *Io.File.Writer) !usize {
     switch (builtin.os.tag) {
         .windows => {
-            var csbi: w.CONSOLE_SCREEN_BUFFER_INFO = undefined;
+            var csbi: k32.CONSOLE_SCREEN_BUFFER_INFO = undefined;
             _ = k32.GetConsoleScreenBufferInfo(out.file.handle, &csbi);
             return @intCast(csbi.dwSize.X);
         },
@@ -162,7 +167,7 @@ pub fn beep(io: std.Io) !void {
     try writer.flush();
 }
 
-var utf8ConsoleBuffer = [_]u8{0} * *10;
+var utf8ConsoleBuffer = @as([10]u8, @splat(0)); // [_]u8{0} * *10;
 var utf8ConsoleReadBytes: usize = 0;
 
 // this is needed due to a bug in win32 console: https://github.com/microsoft/terminal/issues/4551
@@ -180,13 +185,13 @@ fn readWin32Console(self: Io.File.Handle, buffer: []u8) !usize {
         }
         var charsRead: w.DWORD = 0;
         var wideBuf: [2]w.WCHAR = undefined;
-        if (ReadConsoleW(self, &wideBuf, 1, &charsRead, null) == 0)
+        if (ReadConsoleW(self, &wideBuf, 1, &charsRead, null) == .FALSE)
             return 0;
         if (charsRead == 0)
             break;
         const wideBufLen: u8 = if (wideBuf[0] >= 0xD800 and wideBuf[0] <= 0xDBFF) _: {
             // read surrogate
-            if (ReadConsoleW(self, wideBuf[1..], 1, &charsRead, null) == 0)
+            if (ReadConsoleW(self, wideBuf[1..], 1, &charsRead, null) == .FALSE)
                 return 0;
             if (charsRead == 0)
                 break;

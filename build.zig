@@ -9,10 +9,13 @@ pub fn build(b: *Build) void {
         .optimize = optimize,
     }).module("wcwidth");
 
+    const zigwin32 = b.dependency("zigwin32", .{}).module("win32");
+
     const linenoise = b.addModule("linenoise", .{
         .root_source_file = b.path("src/main.zig"),
         .imports = &.{
             .{ .name = "wcwidth", .module = wcwidth },
+            .{ .name = "zigwin32", .module = zigwin32 },
         },
         .target = target,
         .optimize = optimize,
@@ -29,6 +32,7 @@ pub fn build(b: *Build) void {
         }),
     });
     lib.root_module.addImport("wcwidth", wcwidth);
+    lib.root_module.addImport("zigwin32", zigwin32);
     lib.root_module.link_libc = true;
     b.installArtifact(lib);
 
